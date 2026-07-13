@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { fetchJob } from "../api/client";
 import { PageTransition } from "../components/PageTransition";
+import { SourceBadge } from "../components/SourceBadge";
 import { TagBadge } from "../components/TagBadge";
 import { Avatar } from "../components/ui/Avatar";
 import { Button } from "../components/ui/Button";
@@ -85,9 +86,12 @@ export function JobDetailPage() {
             <div className="flex items-center gap-3.5">
               <Avatar name={job.company ?? "?"} size={48} />
               <div>
-                <h1 className="text-xl font-semibold" style={{ color: "var(--text-primary)" }}>
-                  {job.position}
-                </h1>
+                <div className="flex items-center gap-2">
+                  <h1 className="text-xl font-semibold" style={{ color: "var(--text-primary)" }}>
+                    {job.position}
+                  </h1>
+                  <SourceBadge source={job.source} />
+                </div>
                 <p className="text-[15px] mt-0.5" style={{ color: "var(--text-secondary)" }}>
                   {job.company}
                 </p>
@@ -101,6 +105,7 @@ export function JobDetailPage() {
               <span className="flex items-center gap-1.5">
                 <MapPin size={14} style={{ color: "var(--text-muted)" }} />
                 {job.location ?? "Location not specified"}
+                {job.remote_type && ` · ${job.remote_type === "remote" ? "Remote" : "Onsite"}`}
               </span>
               <span className="flex items-center gap-1.5">
                 <Wallet size={14} style={{ color: "var(--text-muted)" }} />
@@ -133,8 +138,9 @@ export function JobDetailPage() {
               <div
                 className="mt-6 pt-6 text-sm leading-relaxed job-description"
                 style={{ borderTop: "1px solid var(--border)", color: "var(--text-primary)" }}
-                // job.description is third-party, company-submitted HTML from RemoteOK -
-                // never trust it as-is. DOMPurify strips scripts/handlers before it hits the DOM.
+                // job.description is third-party, company-submitted HTML from whichever
+                // source this posting came from - never trust it as-is. DOMPurify strips
+                // scripts/handlers before it hits the DOM.
                 dangerouslySetInnerHTML={{
                   __html: DOMPurify.sanitize(job.description, {
                     ALLOWED_TAGS: ["p", "br", "b", "strong", "i", "em", "ul", "ol", "li", "a"],

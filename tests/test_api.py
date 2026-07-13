@@ -46,3 +46,27 @@ def test_top_companies_shape():
     response = client.get("/api/stats/top-companies", params={"limit": 3})
     assert response.status_code == 200
     assert len(response.json()) <= 3
+
+
+def test_companies_endpoint():
+    response = client.get("/api/companies", params={"limit": 3})
+    assert response.status_code == 200
+    assert len(response.json()) <= 3
+
+
+def test_skills_endpoint():
+    response = client.get("/api/skills", params={"limit": 3})
+    assert response.status_code == 200
+    assert len(response.json()) <= 3
+
+
+def test_sources_endpoint():
+    response = client.get("/api/stats/sources")
+    assert response.status_code == 200
+
+
+def test_jobs_csv_export():
+    response = client.get("/api/jobs/export.csv", params={"page_size": 5})
+    assert response.status_code == 200
+    assert response.headers["content-type"].startswith("text/csv")
+    assert response.text.splitlines()[0].startswith("id,source,position")

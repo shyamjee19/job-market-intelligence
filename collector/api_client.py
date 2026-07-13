@@ -8,7 +8,7 @@ from utils.logger import logger
 
 class APIClient:
     def __init__(self):
-        self.url = settings.API_URL
+        self.url = settings.REMOTEOK_API_URL
         self.headers = {"User-Agent": "JobPulse/1.0"}
 
     @retry(max_attempts=settings.API_RETRY_ATTEMPTS, delay=settings.API_RETRY_DELAY_SECONDS)

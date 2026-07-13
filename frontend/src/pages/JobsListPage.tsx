@@ -1,17 +1,18 @@
-import { AlertTriangle, MapPin, Search, SearchX, Tag as TagIcon, X } from "lucide-react";
+import { AlertTriangle, Download, MapPin, Search, SearchX, Tag as TagIcon, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { fetchJobs } from "../api/client";
+import { fetchJobs, fetchSources, jobsExportCsvUrl } from "../api/client";
 import { PageTransition } from "../components/PageTransition";
 import { Pagination } from "../components/Pagination";
+import { SourceBadge } from "../components/SourceBadge";
 import { TagBadge } from "../components/TagBadge";
 import { Avatar } from "../components/ui/Avatar";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { Input } from "../components/ui/Input";
 import { SkeletonTableRows } from "../components/ui/Skeleton";
-import { formatDate, formatSalary } from "../lib/format";
-import type { JobSummary } from "../types";
+import { formatDate, formatSalary, formatSource } from "../lib/format";
+import type { CountByLabel, JobSummary } from "../types";
 
 const PAGE_SIZE = 20;
 
@@ -20,24 +21,30 @@ export function JobsListPage() {
   const [search, setSearch] = useState("");
   const [location, setLocation] = useState("");
   const [tag, setTag] = useState("");
+  const [source, setSource] = useState("");
   const [page, setPage] = useState(1);
 
   const [items, setItems] = useState<JobSummary[]>([]);
   const [total, setTotal] = useState(0);
+  const [sources, setSources] = useState<CountByLabel[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [requestId, setRequestId] = useState(0);
 
   useEffect(() => {
+    fetchSources().then(setSources).catch(() => {});
+  }, []);
+
+  useEffect(() => {
     setPage(1);
-  }, [search, location, tag]);
+  }, [search, location, tag, source]);
 
   useEffect(() => {
     let cancelled = false;
     const timer = setTimeout(() => {
       setLoading(true);
       setError(null);
-      fetchJobs({ search, location, tag, page, page_size: PAGE_SIZE })
+      fetchJobs({ search, location, tag, source, page, page_size: PAGE_SIZE })
         .then((res) => {
           if (cancelled) return;
           setItems(res.items);
@@ -55,12 +62,13 @@ export function JobsListPage() {
       cancelled = true;
       clearTimeout(timer);
     };
-  }, [search, location, tag, page, requestId]);
+  }, [search, location, tag, source, page, requestId]);
 
   const activeFilters = [
     search && { key: "search", label: `"${search}"`, clear: () => setSearch("") },
     location && { key: "location", label: location, clear: () => setLocation("") },
     tag && { key: "tag", label: tag, clear: () => setTag("") },
+    source && { key: "source", label: formatSource(source), clear: () => setSource("") },
   ].filter(Boolean) as { key: string; label: string; clear: () => void }[];
 
   const hasFilters = activeFilters.length > 0;
@@ -76,9 +84,15 @@ export function JobsListPage() {
             <p className="text-sm mt-1 tabular" style={{ color: "var(--text-secondary)" }}>
               {loading
                 ? "Loading…"
-                : `${total.toLocaleString()} open roles${hasFilters ? " matching your filters" : " tracked from RemoteOK"}`}
+                : `${total.toLocaleString()} open roles${hasFilters ? " matching your filters" : ` across ${sources.length || 1} source${sources.length === 1 ? "" : "s"}`}`}
             </p>
           </div>
+          <a href={jobsExportCsvUrl({ search, location, tag, source })} download>
+            <Button>
+              <Download size={14} />
+              Export CSV
+            </Button>
+          </a>
         </div>
 
         <div className="flex flex-wrap gap-2 mb-3">
@@ -106,6 +120,19 @@ export function JobsListPage() {
             icon={<TagIcon size={15} />}
             className="w-40"
           />
+          <select
+            value={source}
+            onChange={(e) => setSource(e.target.value)}
+            className="rounded-lg text-sm px-3 py-2 outline-none"
+            style={{ background: "var(--surface-1)", border: "1px solid var(--border)", color: "var(--text-primary)" }}
+          >
+            <option value="">All sources</option>
+            {sources.map((s) => (
+              <option key={s.label} value={s.label}>
+                {formatSource(s.label)} ({s.count})
+              </option>
+            ))}
+          </select>
         </div>
 
         {hasFilters && (
@@ -130,6 +157,7 @@ export function JobsListPage() {
                 setSearch("");
                 setLocation("");
                 setTag("");
+                setSource("");
               }}
               className="text-xs font-medium px-2 py-1"
               style={{ color: "var(--text-muted)" }}
@@ -159,6 +187,7 @@ export function JobsListPage() {
                 <thead>
                   <tr style={{ background: "var(--surface-2)", color: "var(--text-secondary)" }}>
                     <th className="text-left font-medium px-4 py-2.5">Position</th>
+                    <th className="text-left font-medium px-4 py-2.5">Source</th>
                     <th className="text-left font-medium px-4 py-2.5">Location</th>
                     <th className="text-left font-medium px-4 py-2.5">Salary</th>
                     <th className="text-left font-medium px-4 py-2.5">Tags</th>
@@ -170,7 +199,7 @@ export function JobsListPage() {
                     <SkeletonTableRows rows={10} />
                   ) : items.length === 0 ? (
                     <tr>
-                      <td colSpan={5} className="px-4 py-16">
+                      <td colSpan={6} className="px-4 py-16">
                         <div className="flex flex-col items-center gap-2 text-center">
                           <SearchX size={26} style={{ color: "var(--text-muted)" }} />
                           <p style={{ color: "var(--text-secondary)" }}>No jobs match your filters.</p>
@@ -180,8 +209,8 @@ export function JobsListPage() {
                   ) : (
                     items.map((job) => (
                       <tr
-                        key={job.job_id}
-                        onClick={() => navigate(`/jobs/${job.job_id}`)}
+                        key={job.id}
+                        onClick={() => navigate(`/jobs/${job.id}`)}
                         className="cursor-pointer transition-colors duration-100 hover:bg-black/[0.02] dark:hover:bg-white/[0.03]"
                         style={{ borderTop: "1px solid var(--border)" }}
                       >
@@ -197,6 +226,9 @@ export function JobsListPage() {
                               </div>
                             </div>
                           </div>
+                        </td>
+                        <td className="px-4 py-3">
+                          <SourceBadge source={job.source} />
                         </td>
                         <td className="px-4 py-3" style={{ color: "var(--text-secondary)" }}>
                           {job.location ?? "—"}

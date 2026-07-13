@@ -1,6 +1,14 @@
 from datetime import date
 
-from utils.helper import clean_text, dedupe_by_key, normalize_salary, normalize_tags, parse_date
+from utils.helper import (
+    clean_text,
+    dedupe_by_key,
+    detect_remote_type,
+    normalize_salary,
+    normalize_tags,
+    parse_date,
+    parse_epoch_date,
+)
 
 
 def test_clean_text_strips_whitespace():
@@ -25,6 +33,15 @@ def test_parse_date_invalid_returns_none():
     assert parse_date(None) is None
 
 
+def test_parse_epoch_date_valid():
+    assert parse_epoch_date(1783593004) == date(2026, 7, 9)
+
+
+def test_parse_epoch_date_invalid_returns_none():
+    assert parse_epoch_date("not-a-number") is None
+    assert parse_epoch_date(None) is None
+
+
 def test_normalize_salary_treats_zero_as_unknown():
     assert normalize_salary(0, 0) == (None, None)
 
@@ -43,6 +60,19 @@ def test_normalize_tags_strips_and_drops_blanks():
 
 def test_normalize_tags_handles_none():
     assert normalize_tags(None) == []
+
+
+def test_detect_remote_type_keeps_base_when_no_hybrid_mention():
+    assert detect_remote_type("onsite", "Backend Engineer", "Join our office team") == "onsite"
+
+
+def test_detect_remote_type_detects_hybrid_in_text():
+    assert detect_remote_type("onsite", "Backend Engineer (hybrid)", None) == "hybrid"
+    assert detect_remote_type("remote", None, "This is a hybrid role, 2 days in office") == "hybrid"
+
+
+def test_detect_remote_type_ignores_none_texts():
+    assert detect_remote_type("remote", None, None) == "remote"
 
 
 def test_dedupe_by_key_keeps_last_occurrence():

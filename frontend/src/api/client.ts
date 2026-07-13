@@ -1,5 +1,6 @@
 import type {
   CountByLabel,
+  HiringTrend,
   JobDetail,
   JobFilters,
   JobListResponse,
@@ -45,8 +46,8 @@ export function fetchTopCompanies(limit = 10): Promise<CountByLabel[]> {
   return request(`/api/stats/top-companies${buildQuery({ limit })}`);
 }
 
-export function fetchTopTags(limit = 15): Promise<CountByLabel[]> {
-  return request(`/api/stats/top-tags${buildQuery({ limit })}`);
+export function fetchTopTags(limit = 15, category?: string): Promise<CountByLabel[]> {
+  return request(`/api/stats/top-tags${buildQuery({ limit, category })}`);
 }
 
 export function fetchPostingsByDate(): Promise<PostingsByDate[]> {
@@ -55,4 +56,20 @@ export function fetchPostingsByDate(): Promise<PostingsByDate[]> {
 
 export function fetchSalaryDistribution(): Promise<SalaryBucket[]> {
   return request(`/api/stats/salary-distribution`);
+}
+
+export function fetchSources(): Promise<CountByLabel[]> {
+  return request(`/api/stats/sources`);
+}
+
+export function fetchHiringMap(): Promise<CountByLabel[]> {
+  return request(`/api/stats/hiring-map`);
+}
+
+export function fetchTrend(): Promise<HiringTrend> {
+  return request(`/api/stats/trend`);
+}
+
+export function jobsExportCsvUrl(filters: JobFilters): string {
+  return `${API_URL}/api/jobs/export.csv${buildQuery({ ...filters })}`;
 }
