@@ -11,7 +11,7 @@ from auth.security import (
     create_refresh_token,
     decode_token,
     hash_password,
-    hash_refresh_token,
+    hash_token,
     verify_password,
 )
 
@@ -62,8 +62,8 @@ def test_decode_tampered_token_raises():
         decode_token(token + "tampered")
 
 
-def test_hash_refresh_token_is_deterministic_and_one_way():
+def test_hash_token_is_deterministic_and_one_way():
     token = "some-refresh-token-value"
-    hashed = hash_refresh_token(token)
-    assert hashed == hash_refresh_token(token)
+    hashed = hash_token(token)
+    assert hashed == hash_token(token)
     assert hashed != token

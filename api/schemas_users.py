@@ -38,3 +38,20 @@ class AlertOut(BaseModel):
 class ResumeUploadResponse(BaseModel):
     resume_filename: str
     resume_uploaded_at: datetime
+
+
+class NotificationOut(BaseModel):
+    notification_id: int
+    alert_id: int | None
+    subject: str | None
+    body: str | None
+    status: str
+    is_read: bool
+    created_at: datetime
+
+
+class NotificationListResponse(BaseModel):
+    items: list[NotificationOut]
+    total: int
+    page: int
+    page_size: int

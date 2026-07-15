@@ -12,6 +12,7 @@ export function LoginPage() {
   const navigate = useNavigate();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [rememberMe, setRememberMe] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -20,8 +21,8 @@ export function LoginPage() {
     setError(null);
     setLoading(true);
     try {
-      await login(email, password);
-      navigate("/");
+      await login(email, password, rememberMe);
+      navigate("/dashboard", { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : "Login failed");
     } finally {
@@ -65,6 +66,16 @@ export function LoginPage() {
               className="rounded-lg px-3.5 py-2.5 text-sm outline-none"
               style={inputStyle}
             />
+
+            <div className="flex items-center justify-between text-xs" style={{ color: "var(--text-secondary)" }}>
+              <label className="flex items-center gap-1.5">
+                <input type="checkbox" checked={rememberMe} onChange={(e) => setRememberMe(e.target.checked)} />
+                Remember me
+              </label>
+              <Link to="/forgot-password" className="hover:underline" style={{ color: "var(--series-blue)" }}>
+                Forgot password?
+              </Link>
+            </div>
 
             {error && (
               <div className="flex items-center gap-2 text-sm" style={{ color: "var(--status-critical)" }}>

@@ -45,10 +45,9 @@ def create_access_token(user_id: int, role: str) -> str:
     )
 
 
-def create_refresh_token(user_id: int, role: str) -> str:
-    return _create_token(
-        user_id, role, REFRESH_TOKEN_TYPE, timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
-    )
+def create_refresh_token(user_id: int, role: str, expire_days: int | None = None) -> str:
+    days = expire_days if expire_days is not None else settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS
+    return _create_token(user_id, role, REFRESH_TOKEN_TYPE, timedelta(days=days))
 
 
 def decode_token(token: str) -> dict:
@@ -58,9 +57,11 @@ def decode_token(token: str) -> dict:
     return jwt.decode(token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM])
 
 
-def hash_refresh_token(token: str) -> str:
-    """Refresh tokens are stored hashed (like passwords) so a database
-    leak doesn't hand out live sessions. Plain SHA-256 is fine here (not
-    bcrypt): the token itself is already a high-entropy random JWT, not a
-    human-chosen password vulnerable to a dictionary attack."""
+def hash_token(token: str) -> str:
+    """Generic hash for high-entropy, server-generated tokens (refresh
+    tokens, password-reset tokens) that need to be stored at rest without
+    exposing a live credential if the database leaks. Plain SHA-256 is
+    fine here (not bcrypt): the token itself is already random and
+    high-entropy, not a human-chosen password vulnerable to a dictionary
+    attack."""
     return hashlib.sha256(token.encode("utf-8")).hexdigest()

@@ -16,7 +16,17 @@ def _unique_email() -> str:
 
 def _register_and_login(use_test_db) -> tuple[dict, str]:
     email = _unique_email()
-    response = client.post("/api/v1/auth/register", json={"email": email, "password": "SuperSecret123"})
+    response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "first_name": "Test",
+            "last_name": "User",
+            "email": email,
+            "password": "SuperSecret123",
+            "confirm_password": "SuperSecret123",
+            "terms_accepted": True,
+        },
+    )
     tokens = response.json()
     return tokens, tokens["access_token"]
 
@@ -144,3 +154,38 @@ def test_update_profile(use_test_db):
     assert response.status_code == 200
     assert response.json()["headline"] == "Senior Engineer"
     assert response.json()["skills"] == ["python", "sql"]
+
+
+def test_notifications_list_starts_empty(use_test_db):
+    _, token = _register_and_login(use_test_db)
+    headers = _auth_header(token)
+
+    response = client.get("/api/v1/users/me/notifications", headers=headers)
+    assert response.status_code == 200
+    assert response.json() == {"items": [], "total": 0, "page": 1, "page_size": 20}
+
+    unread = client.get("/api/v1/users/me/notifications/unread-count", headers=headers)
+    assert unread.json() == {"count": 0}
+
+
+def test_notifications_mark_read(use_test_db):
+    from database.users_repository import log_notification
+
+    _, token = _register_and_login(use_test_db)
+    headers = _auth_header(token)
+    me = client.get("/api/v1/auth/me", headers=headers).json()
+    log_notification(me["user_id"], "Test alert", "A new job matched your alert.")
+
+    listed = client.get("/api/v1/users/me/notifications", headers=headers)
+    assert listed.json()["total"] == 1
+    notification_id = listed.json()["items"][0]["notification_id"]
+    assert listed.json()["items"][0]["is_read"] is False
+
+    unread_before = client.get("/api/v1/users/me/notifications/unread-count", headers=headers)
+    assert unread_before.json()["count"] == 1
+
+    mark = client.patch(f"/api/v1/users/me/notifications/{notification_id}/read", headers=headers)
+    assert mark.status_code == 204
+
+    unread_after = client.get("/api/v1/users/me/notifications/unread-count", headers=headers)
+    assert unread_after.json()["count"] == 0

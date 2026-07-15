@@ -55,7 +55,22 @@ ai/services/rag_chatbot_service.py
 - **The RAG chatbot works today with no paid vector database.** `ai/vectorstore/` has the same swappable-provider pattern: `InMemoryVectorStore` (numpy cosine similarity, persists to `data/ai/memory_vector_store.json`, no account needed) is the default, so the feature is fully testable right now. Set `VECTOR_STORE_PROVIDER=pinecone` once you have a Pinecone key and nothing else changes - `ai/services/rag_chatbot_service.py` codes only against the `VectorStore` interface.
 - **Indexing is a separate, explicit step** (`python main.py ai-index`, or `ai/services/rag_indexer.py`) - it embeds every job posting and upserts it into the active vector store. Not automatic after `etl`, so re-embedding (and its API cost) only happens when you ask for it.
 - **AI security**: input length limits (`AI_MAX_MESSAGE_LENGTH`), a sliding-window rate limiter per client IP (`AI_RATE_LIMIT_PER_MINUTE`, in-memory - dev-grade, would move to Redis for multi-worker deployments), in-memory conversation history (also dev-grade, same caveat), and prompt-injection resistance in the system prompt (the LLM is told retrieved job text is data to read, not instructions to follow). API keys only ever come from `.env` via `config/settings.py`, never hardcoded or logged; token usage is logged per request.
-- **What's not built**: the other 12 AI features from the original spec (Resume Analyzer, Dashboard NL-to-SQL Assistant, Trend Prediction, Report Generator, Notifications, Interview Assistant, etc.) - each needs real infrastructure beyond an LLM call (file upload/parsing, a forecasting model, PDF generation, a notification delivery system) and was scoped out of this pass. The provider/vector-store architecture here is built to support them without a redesign when they're prioritized.
+- **What's not built**: Dashboard NL-to-SQL Assistant, Trend Prediction, Report Generator, and a real (non-logged) notification delivery system - each needs infrastructure beyond an LLM call (a forecasting model, PDF generation, an email/push service) and stayed out of scope. Resume Analyzer, Career Advisor, Skill Gap Analysis, Salary Insights, Job Recommendations, and Interview Prep **are** built - see the AI tools section below.
+
+#### AI tools (`ai/services/ai_tools_service.py`, `ai/prompts/ai_tools.py`)
+
+Six protected (`/ai/tools/*`, requires login), single-purpose AI features, each a thin layer over the same chat provider as the RAG chatbot but with a specialized prompt - **and wherever real numbers are available, those come straight from Postgres, not the LLM's guess**, so the model's job is narration and prioritization, never invention:
+
+| Tool | Endpoint | What's computed vs. narrated |
+|---|---|---|
+| Resume Analyzer | `POST /ai/tools/resume-analyzer` | Pasted resume text (no PDF parsing - paste, don't upload) checked against real `top_tags()` skill-demand data; LLM narrates strengths/gaps. |
+| Career Advisor | `POST /ai/tools/career-advisor` | Real postings matching the stated goal are retrieved and handed to the LLM as grounding for a step-by-step roadmap. |
+| Skill Gap Analysis | `POST /ai/tools/skill-gap` | **Fully computed, not guessed**: tags across postings matching the target role are tallied in Python and split into have/missing sets before the LLM ever sees them - it only prioritizes and explains. |
+| Salary Insights | `POST /ai/tools/salary-insights` | **Fully computed**: average/highest salary and sample size come from a real `list_jobs()` query filtered by role/location; the LLM only interprets the numbers (and flags a small sample size as uncertain). |
+| Job Recommendations | `GET /ai/tools/job-recommendations` | **Fully computed**: postings are ranked by tag overlap with the user's profile skills (`database.queries.list_jobs(tag=...)`, summed per posting) - real filtering, not a black-box "AI match", with an LLM summary on top. |
+| Interview Prep | `POST /ai/tools/interview-prep` | If a company is given, real postings mentioning it ground the LLM's likely-questions list; otherwise it answers generically and says so. |
+
+Skill/tag matching in these tools is a simple case-insensitive string match against `dim_skill` tag names - the same "intentionally approximate, documented" pattern as `utils/skill_categories.py` (won't catch synonyms like "JS" vs "JavaScript"). All six share one rate-limit namespace (`ai-tools`, keyed by user ID) and the `_run_tool()` helper in `ai/router.py`, which turns any provider failure into a 503 rather than a 500.
 
 ### SaaS platform layer (`auth/`, `jobs/`, `api/routes/users.py`, `api/routes/admin.py`)
 
@@ -76,7 +91,9 @@ Browser
    └─> /api/v1/admin/*  (role=admin only)          ──> user list, role/active toggles, audit log, stats
 ```
 
-- **JWT auth with refresh rotation.** `auth/security.py` issues short-lived access tokens (30 min default) and longer-lived refresh tokens (30 days default); `POST /auth/refresh` is single-use - each refresh token is revoked the moment it's exchanged and a new one issued, so a stolen, already-used refresh token is inert. Refresh tokens are stored server-side as SHA-256 hashes, never plaintext.
+- **JWT auth with refresh rotation.** `auth/security.py` issues short-lived access tokens (30 min default) and longer-lived refresh tokens (30 days default, or `JWT_REMEMBER_ME_OFF_REFRESH_DAYS` = 1 day when "Remember me" is unchecked at login); `POST /auth/refresh` is single-use - each refresh token is revoked the moment it's exchanged and a new one issued, so a stolen, already-used refresh token is inert. Refresh tokens are stored server-side as SHA-256 hashes, never plaintext.
+- **Registration auto-logs-in.** `POST /auth/register` returns the same `TokenResponse` shape as `/login` - the frontend never redirects a newly-registered user back to a login form, straight to `/dashboard` instead. First/last name, email, password, and terms acceptance are required; country and a job title are optional and, if given, seed the user's profile (`location`/`headline`) rather than adding new columns just for the signup form. `terms_accepted_at` is recorded server-side for a real consent trail, not just a client-side checkbox.
+- **Forgot/reset password** (`POST /auth/forgot-password`, `POST /auth/reset-password`) uses the same hashed-token-at-rest pattern as refresh tokens (`password_reset_tokens`, 30-minute expiry). The forgot-password endpoint always returns the same response regardless of whether the email is registered, so it can't be used to enumerate accounts. A successful reset revokes every refresh token for that user - resetting your password logs you out everywhere, not just the device that requested it. Same revoke-everywhere behavior on `PATCH /auth/me/password` (change password while logged in).
 - **RBAC** is a `role` column (`user`/`admin`) on `users`, enforced via FastAPI dependencies (`auth/dependencies.py`): `get_current_user`, `require_admin`, `get_optional_user`. Because a JWT is immutable once signed, promoting a user to admin (see below) doesn't take effect until they log in again - their existing token still carries the old role.
 - **Google and GitHub OAuth are fully implemented and inactive until configured** - same conditional-activation pattern as Adzuna/USAJobs/Pinecone. Without credentials in `.env`, `/auth/google` and `/auth/github` return a clear 503 instead of crashing; the login page's OAuth buttons work as soon as you add `GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET` or `GITHUB_CLIENT_ID`/`GITHUB_CLIENT_SECRET`. The callback never puts a real JWT in the browser URL/history - it redirects with a one-time exchange code (`auth/oauth/state_store.py`) that the frontend swaps for tokens via `POST /auth/oauth/exchange`.
 - **Resume upload is validated, not trusted.** `utils/resume_storage.py` checks the file extension (`.pdf`/`.doc`/`.docx`), size (`RESUME_MAX_SIZE_MB`), and the actual file signature (magic bytes) before saving - a renamed `.exe` won't pass. Files are stored under a per-user, UUID-named path, never the original filename, so there's no path-traversal or filename-collision risk.
@@ -93,6 +110,32 @@ Browser
 UPDATE users SET role = 'admin' WHERE email = 'you@example.com';
 ```
 Then log out and back in - the new role only applies to a freshly issued token.
+
+### Frontend UX: landing page, auth flow, app shell
+
+```
+First-time visitor              Returning / logged-in visitor
+        │                                  │
+        v                                  v
+  "/" -> LandingPage              "/" -> redirect -> /dashboard
+        │
+   Get started
+        │
+        v
+   /register (GuestOnlyRoute)
+        │  auto-login on success
+        v
+   /dashboard  (inside the Sidebar app shell)
+```
+
+- **`RootRoute` (`App.tsx`) decides what "/" means.** Logged-out visitors see `LandingPage` (hero, live stats pulled from `/stats/summary`, a dashboard preview, an AI-assistant mockup, feature cards); an already-authenticated visitor is redirected straight to `/dashboard` - the landing page and login form are never shown to someone who's already signed in.
+- **`GuestOnlyRoute`** (`components/ProtectedRoute.tsx`) does the inverse for `/login`, `/register`, and `/forgot-password` - visiting them while authenticated redirects to `/dashboard` instead of rendering the form.
+- **Everything past the landing page requires a session.** `/jobs`, `/jobs/:id`, `/dashboard`, and `/assistant` are wrapped in `ProtectedRoute` alongside the account/AI-tool/admin pages - a logged-out visitor's only reachable pages are the landing page and the auth forms; clicking anything else (including the landing page's own "Browse jobs" CTA) redirects to `/login`. `components/AppLayout.tsx` is a layout route wrapping every non-landing page: since only the auth pages (`/login`, `/register`, `/forgot-password`, `/reset-password`, `/oauth/callback`) are ever reachable while logged out, `Navbar` in its logged-out state is a bare brand + Sign in/Sign up, not a functional nav. Logged-in, `AppLayout` renders `components/Sidebar.tsx` instead (Notion/Linear-style grouped nav: Overview, AI Tools, Account, and an Admin group that only renders when `user.role === "admin"`) plus a slim top bar (theme toggle, `NotificationBell`, `UserMenu`).
+- **`NotificationBell`** polls `/users/me/notifications/unread-count` for the badge and lazy-loads the last 5 on open; `/notifications` is the full paginated page with mark-one/mark-all-read.
+- **`/settings`** covers account info (email, role, join date) and a change-password form; theme is still purely client-side (localStorage + `data-theme`), no account setting needed for it.
+- **Two real bugs found and fixed during verification, not by inspection** (both surfaced only under repeated live Playwright runs):
+  - `AuthContext.refreshUser()` originally called `clearTokens()` on *any* failure of the initial `/auth/me` check on mount - including a request aborted by the browser mid-flight (e.g. the user navigating away before it resolved) or a transient network blip, not just a genuine "this token is invalid" 401. That logged a user out just because a request didn't finish in time. Fixed by only ever clearing tokens from the one place that actually confirms invalidity: `httpClient.ts`'s 401-then-failed-refresh path in `apiRequest`.
+  - Signing out from a page that's now `ProtectedRoute`-guarded (e.g. `/jobs`) could land on `/login` instead of the landing page. `AnimatePresence`'s exit-animation delay keeps the outgoing page's component tree mounted for a moment after navigating away - long enough for its own `ProtectedRoute` to notice `user` just became `null` and independently redirect to `/login`, racing the explicit `navigate("/")` call from the sign-out button and sometimes winning. Fixed by having sign-out do a hard `window.location.replace("/")` instead (same pattern `OAuthCallbackPage` already used), which discards the old route tree instead of racing it.
 
 ### Future extension: streaming stack, more sources, cloud warehouse
 
@@ -143,7 +186,7 @@ python main.py ai-index    # embeds every job posting into the RAG vector store
 Re-run it whenever you've collected new postings and want the assistant grounded in the latest data. Then use the "Assistant" tab in the UI, or call the API directly:
 
 ```
-curl -X POST http://localhost:8000/api/ai/chat -H "Content-Type: application/json" -d '{"message": "What skills are trending?"}'
+curl -X POST http://localhost:8000/api/v1/ai/chat -H "Content-Type: application/json" -d '{"message": "What skills are trending?"}'
 ```
 
 ## Running the UI
@@ -181,7 +224,7 @@ celery -A jobs.celery_app worker --beat --loglevel=info
 pytest
 ```
 
-Unit tests (`test_helper.py`, `test_validate.py`, `test_transform.py`, `test_geo.py`, `test_skill_categories.py`, `test_collector_registry.py`, `test_memory_vector_store.py`, `test_rate_limiter.py`, `test_rag_prompts.py`, `test_rag_chatbot_service.py`, `test_ai_router.py`, `test_auth_security.py`, `test_cache.py`) run with no dependencies and no real API calls - the AI tests inject fake `ChatProvider`/`EmbeddingProvider`/`VectorStore` implementations rather than hitting OpenAI, and `test_auth_security.py`/`test_cache.py` exercise pure functions (hashing, JWT encode/decode, the in-memory cache) directly. Integration tests (`test_connection.py`, `test_repository.py`, `test_api.py`, `test_auth_router.py`, `test_users_router.py`, `test_admin_router.py`, `test_alert_matcher.py`) need a reachable Postgres instance and skip automatically if one isn't available. All of them run against an isolated `{DB_NAME}_test` database (auto-provisioned via the `use_test_db` fixture in `tests/conftest.py`), never your real data.
+Unit tests (`test_helper.py`, `test_validate.py`, `test_transform.py`, `test_geo.py`, `test_skill_categories.py`, `test_collector_registry.py`, `test_memory_vector_store.py`, `test_rate_limiter.py`, `test_rag_prompts.py`, `test_rag_chatbot_service.py`, `test_ai_router.py`, `test_auth_security.py`, `test_cache.py`) run with no dependencies and no real API calls - the AI tests inject fake `ChatProvider`/`EmbeddingProvider`/`VectorStore` implementations rather than hitting OpenAI, and `test_auth_security.py`/`test_cache.py` exercise pure functions (hashing, JWT encode/decode, the in-memory cache) directly. Integration tests (`test_connection.py`, `test_repository.py`, `test_api.py`, `test_auth_router.py`, `test_users_router.py`, `test_admin_router.py`, `test_alert_matcher.py`, `test_ai_tools_service.py`) need a reachable Postgres instance and skip automatically if one isn't available - `test_ai_tools_service.py` seeds real postings and asserts the *computed* parts of each AI tool (skill demand tallies, salary averages, recommendation ranking) against a fake chat provider, so those assertions hold regardless of whether a real LLM key is configured. All of them run against an isolated `{DB_NAME}_test` database (auto-provisioned via the `use_test_db` fixture in `tests/conftest.py`), never your real data.
 
 ## Project layout
 
@@ -197,10 +240,18 @@ auth/                 security.py (hashing/JWT), dependencies.py (RBAC), schemas
                       oauth/ (google.py, github.py, base.py, state_store.py)
 ai/                   providers/ (openai, claude, azure_openai, ollama, registry.py)
                       vectorstore/ (memory, pinecone, registry.py)
-                      prompts/, services/ (rag_indexer, rag_chatbot_service, conversation_store, rate_limiter)
+                      prompts/ (rag_chatbot.py, ai_tools.py), services/ (rag_indexer, rag_chatbot_service,
+                      ai_tools_service, conversation_store, rate_limiter)
                       models/ (schemas.py), router.py
 jobs/                 alert_matcher.py (matching logic), celery_app.py, tasks.py
-frontend/             React + Vite + TypeScript UI (src/pages, src/components, src/api, src/context, src/hooks)
+frontend/             React + Vite + TypeScript UI
+                      src/pages/          LandingPage, LoginPage, RegisterPage, Forgot/ResetPasswordPage,
+                                          JobsListPage, JobDetailPage, DashboardPage, AssistantPage,
+                                          SavedJobsPage, ProfilePage, SettingsPage, NotificationsPage,
+                                          AdminDashboardPage, ai/ (6 AI tool pages)
+                      src/components/     AppLayout (Sidebar-or-Navbar by auth state), Sidebar, Navbar,
+                                          UserMenu, NotificationBell, ProtectedRoute (+ AdminRoute, GuestOnlyRoute)
+                      src/api/, src/context/, src/hooks/, src/lib/
 utils/                logger.py, helper.py, exceptions.py, geo.py (country inference), skill_categories.py,
                       cache.py (in-memory/Redis), rate_limiter.py, email.py, resume_storage.py
 tests/                unit + integration tests

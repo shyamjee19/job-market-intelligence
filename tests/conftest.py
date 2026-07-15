@@ -45,6 +45,6 @@ def _reset_rate_limits():
     and fail with 429s that have nothing to do with what they're testing."""
     from utils.rate_limiter import reset as reset_rate_limit
 
-    for namespace in ("auth", "ai-chat", "api"):
+    for namespace in ("auth", "ai-chat", "ai-tools", "api"):
         reset_rate_limit(namespace, "testclient")
     yield

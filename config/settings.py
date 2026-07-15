@@ -114,9 +114,20 @@ class Settings:
         self.GITHUB_CLIENT_SECRET = os.getenv("GITHUB_CLIENT_SECRET")
         self.GITHUB_REDIRECT_URI = os.getenv("GITHUB_REDIRECT_URI", "http://localhost:8000/api/v1/auth/github/callback")
 
+        # Base URL of the frontend - used to build links that go into
+        # emails (password reset) and OAuth redirects.
+        self.FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
         # Where the frontend lands after an OAuth redirect, with a one-time
         # code appended - see auth/router.py.
-        self.OAUTH_FRONTEND_REDIRECT_URL = os.getenv("OAUTH_FRONTEND_REDIRECT_URL", "http://localhost:5173/oauth/callback")
+        self.OAUTH_FRONTEND_REDIRECT_URL = os.getenv("OAUTH_FRONTEND_REDIRECT_URL", f"{self.FRONTEND_URL}/oauth/callback")
+
+        # "Remember me" unchecked at login issues a refresh token that
+        # expires much sooner than the normal 30 days - see auth/router.py.
+        self.JWT_REMEMBER_ME_OFF_REFRESH_DAYS = int(os.getenv("JWT_REMEMBER_ME_OFF_REFRESH_DAYS", "1"))
+
+        # How long a password-reset link stays valid.
+        self.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES = int(os.getenv("PASSWORD_RESET_TOKEN_EXPIRE_MINUTES", "30"))
 
         self.RESUME_UPLOAD_DIR = os.getenv("RESUME_UPLOAD_DIR", "data/resumes")
         self.RESUME_MAX_SIZE_MB = int(os.getenv("RESUME_MAX_SIZE_MB", "5"))

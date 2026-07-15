@@ -1,16 +1,24 @@
 from fastapi import APIRouter, Depends, File, HTTPException, UploadFile, status
 
 from api.schemas import JobSummary
-from api.schemas_users import AlertCreateRequest, AlertOut, FavoriteCompanyOut, ResumeUploadResponse
+from api.schemas_users import (
+    AlertCreateRequest,
+    AlertOut,
+    FavoriteCompanyOut,
+    NotificationListResponse,
+    ResumeUploadResponse,
+)
 from auth.dependencies import get_current_user
 from auth.schemas import ProfileOut, ProfileUpdateRequest
 from config.settings import settings
 from database import queries
 from database.users_queries import (
+    count_unread_notifications,
     get_company_key_by_name,
     get_profile,
     list_alerts,
     list_favorite_companies,
+    list_notifications,
     list_saved_jobs,
 )
 from database.users_repository import (
@@ -18,6 +26,8 @@ from database.users_repository import (
     delete_alert,
     favorite_company,
     log_audit,
+    mark_all_notifications_read,
+    mark_notification_read,
     save_job,
     set_alert_active,
     set_resume,
@@ -115,3 +125,24 @@ def toggle_alert(alert_id: int, is_active: bool, user: dict = Depends(get_curren
 @router.delete("/alerts/{alert_id}", status_code=status.HTTP_204_NO_CONTENT)
 def remove_alert(alert_id: int, user: dict = Depends(get_current_user)):
     delete_alert(alert_id, user["user_id"])
+
+
+@router.get("/notifications", response_model=NotificationListResponse)
+def get_notifications(page: int = 1, page_size: int = 20, user: dict = Depends(get_current_user)):
+    items, total = list_notifications(user["user_id"], page, page_size)
+    return {"items": items, "total": total, "page": page, "page_size": page_size}
+
+
+@router.get("/notifications/unread-count")
+def get_unread_notification_count(user: dict = Depends(get_current_user)):
+    return {"count": count_unread_notifications(user["user_id"])}
+
+
+@router.patch("/notifications/read-all", status_code=status.HTTP_204_NO_CONTENT)
+def read_all_notifications(user: dict = Depends(get_current_user)):
+    mark_all_notifications_read(user["user_id"])
+
+
+@router.patch("/notifications/{notification_id}/read", status_code=status.HTTP_204_NO_CONTENT)
+def read_notification(notification_id: int, user: dict = Depends(get_current_user)):
+    mark_notification_read(notification_id, user["user_id"])

@@ -13,7 +13,17 @@ def _unique_email() -> str:
 
 
 def _register(email: str) -> dict:
-    response = client.post("/api/v1/auth/register", json={"email": email, "password": "SuperSecret123"})
+    response = client.post(
+        "/api/v1/auth/register",
+        json={
+            "first_name": "Test",
+            "last_name": "User",
+            "email": email,
+            "password": "SuperSecret123",
+            "confirm_password": "SuperSecret123",
+            "terms_accepted": True,
+        },
+    )
     return response.json()
 
 

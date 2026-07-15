@@ -14,17 +14,52 @@ def create_user(
     full_name: str | None = None,
     google_id: str | None = None,
     github_id: str | None = None,
+    terms_accepted: bool = False,
 ) -> dict:
     with get_db_cursor(commit=True, cursor_factory=RealDictCursor) as cursor:
         cursor.execute(
             """
-            INSERT INTO users (email, hashed_password, full_name, google_id, github_id)
-            VALUES (%s, %s, %s, %s, %s)
+            INSERT INTO users (email, hashed_password, full_name, google_id, github_id, terms_accepted_at)
+            VALUES (%s, %s, %s, %s, %s, CASE WHEN %s THEN CURRENT_TIMESTAMP ELSE NULL END)
             RETURNING user_id, email, full_name, role, is_active, created_at
             """,
-            (email, hashed_password, full_name, google_id, github_id),
+            (email, hashed_password, full_name, google_id, github_id, terms_accepted),
         )
         return cursor.fetchone()
+
+
+def update_user_password(user_id: int, hashed_password: str) -> None:
+    with get_db_cursor(commit=True) as cursor:
+        cursor.execute(
+            "UPDATE users SET hashed_password = %s, updated_at = CURRENT_TIMESTAMP WHERE user_id = %s",
+            (hashed_password, user_id),
+        )
+
+
+def create_password_reset_token(user_id: int, token_hash: str, expires_at: datetime) -> None:
+    with get_db_cursor(commit=True) as cursor:
+        cursor.execute(
+            "INSERT INTO password_reset_tokens (user_id, token_hash, expires_at) VALUES (%s, %s, %s)",
+            (user_id, token_hash, expires_at),
+        )
+
+
+def mark_password_reset_token_used(token_hash: str) -> None:
+    with get_db_cursor(commit=True) as cursor:
+        cursor.execute("UPDATE password_reset_tokens SET used = TRUE WHERE token_hash = %s", (token_hash,))
+
+
+def mark_notification_read(notification_id: int, user_id: int) -> None:
+    with get_db_cursor(commit=True) as cursor:
+        cursor.execute(
+            "UPDATE notification_log SET is_read = TRUE WHERE notification_id = %s AND user_id = %s",
+            (notification_id, user_id),
+        )
+
+
+def mark_all_notifications_read(user_id: int) -> None:
+    with get_db_cursor(commit=True) as cursor:
+        cursor.execute("UPDATE notification_log SET is_read = TRUE WHERE user_id = %s AND NOT is_read", (user_id,))
 
 
 def link_oauth_id(user_id: int, provider: str, provider_id: str) -> None:

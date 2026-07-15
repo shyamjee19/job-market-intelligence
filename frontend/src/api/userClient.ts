@@ -1,5 +1,13 @@
-import type { FavoriteCompany, JobAlert, JobAlertCreate, JobSummary, Profile, ProfileUpdate } from "../types";
-import { apiRequest } from "./httpClient";
+import type {
+  FavoriteCompany,
+  JobAlert,
+  JobAlertCreate,
+  JobSummary,
+  NotificationListResponse,
+  Profile,
+  ProfileUpdate,
+} from "../types";
+import { apiRequest, buildQuery } from "./httpClient";
 
 export function updateProfile(update: ProfileUpdate): Promise<Profile> {
   return apiRequest("/users/me/profile", { method: "PUT", body: update });
@@ -52,4 +60,20 @@ export function deleteAlert(alertId: number): Promise<void> {
 
 export function toggleAlert(alertId: number, isActive: boolean): Promise<void> {
   return apiRequest(`/users/me/alerts/${alertId}?is_active=${isActive}`, { method: "PATCH", parseResponse: false });
+}
+
+export function fetchNotifications(page = 1, pageSize = 20): Promise<NotificationListResponse> {
+  return apiRequest(`/users/me/notifications${buildQuery({ page, page_size: pageSize })}`);
+}
+
+export function fetchUnreadNotificationCount(): Promise<{ count: number }> {
+  return apiRequest("/users/me/notifications/unread-count");
+}
+
+export function markNotificationRead(notificationId: number): Promise<void> {
+  return apiRequest(`/users/me/notifications/${notificationId}/read`, { method: "PATCH", parseResponse: false });
+}
+
+export function markAllNotificationsRead(): Promise<void> {
+  return apiRequest("/users/me/notifications/read-all", { method: "PATCH", parseResponse: false });
 }

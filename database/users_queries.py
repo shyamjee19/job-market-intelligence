@@ -39,6 +39,45 @@ def get_valid_refresh_token(token_hash: str) -> dict | None:
         return cursor.fetchone()
 
 
+def get_valid_password_reset_token(token_hash: str) -> dict | None:
+    with get_db_cursor(cursor_factory=RealDictCursor) as cursor:
+        cursor.execute(
+            """
+            SELECT * FROM password_reset_tokens
+            WHERE token_hash = %s AND used = FALSE AND expires_at > CURRENT_TIMESTAMP
+            """,
+            (token_hash,),
+        )
+        return cursor.fetchone()
+
+
+def list_notifications(user_id: int, page: int = 1, page_size: int = 20) -> tuple[list[dict], int]:
+    page_size = min(max(page_size, 1), MAX_PAGE_SIZE)
+    page = max(page, 1)
+
+    with get_db_cursor(cursor_factory=RealDictCursor) as cursor:
+        cursor.execute("SELECT COUNT(*) AS total FROM notification_log WHERE user_id = %s", (user_id,))
+        total = cursor.fetchone()["total"]
+
+        cursor.execute(
+            """
+            SELECT * FROM notification_log WHERE user_id = %s
+            ORDER BY created_at DESC
+            LIMIT %s OFFSET %s
+            """,
+            (user_id, page_size, (page - 1) * page_size),
+        )
+        rows = cursor.fetchall()
+
+    return rows, total
+
+
+def count_unread_notifications(user_id: int) -> int:
+    with get_db_cursor(cursor_factory=RealDictCursor) as cursor:
+        cursor.execute("SELECT COUNT(*) AS n FROM notification_log WHERE user_id = %s AND NOT is_read", (user_id,))
+        return cursor.fetchone()["n"]
+
+
 def get_profile(user_id: int) -> dict | None:
     with get_db_cursor(cursor_factory=RealDictCursor) as cursor:
         cursor.execute("SELECT * FROM user_profiles WHERE user_id = %s", (user_id,))

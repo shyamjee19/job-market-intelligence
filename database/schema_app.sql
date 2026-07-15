@@ -98,11 +98,30 @@ CREATE TABLE IF NOT EXISTS audit_logs (
     created_at     TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
+-- Recorded at registration time for a real compliance trail, not just a
+-- client-side checkbox that leaves no server-side evidence of consent.
+ALTER TABLE users ADD COLUMN IF NOT EXISTS terms_accepted_at TIMESTAMP;
+
+-- Same hashed-token-at-rest pattern as refresh_tokens: a leaked database
+-- shouldn't hand out live password-reset capability.
+CREATE TABLE IF NOT EXISTS password_reset_tokens (
+    token_id    SERIAL PRIMARY KEY,
+    user_id     INTEGER NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+    token_hash  VARCHAR(255) UNIQUE NOT NULL,
+    expires_at  TIMESTAMP NOT NULL,
+    used        BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at  TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE notification_log ADD COLUMN IF NOT EXISTS is_read BOOLEAN NOT NULL DEFAULT FALSE;
+
 CREATE INDEX IF NOT EXISTS idx_saved_jobs_user ON saved_jobs (user_id);
 CREATE INDEX IF NOT EXISTS idx_favorite_companies_user ON favorite_companies (user_id);
 CREATE INDEX IF NOT EXISTS idx_job_alerts_user ON job_alerts (user_id);
 CREATE INDEX IF NOT EXISTS idx_job_alerts_active ON job_alerts (is_active) WHERE is_active;
 CREATE INDEX IF NOT EXISTS idx_notification_log_user ON notification_log (user_id);
+CREATE INDEX IF NOT EXISTS idx_notification_log_unread ON notification_log (user_id) WHERE NOT is_read;
 CREATE INDEX IF NOT EXISTS idx_audit_logs_user ON audit_logs (user_id);
 CREATE INDEX IF NOT EXISTS idx_audit_logs_created ON audit_logs (created_at);
 CREATE INDEX IF NOT EXISTS idx_refresh_tokens_user ON refresh_tokens (user_id);
+CREATE INDEX IF NOT EXISTS idx_password_reset_tokens_user ON password_reset_tokens (user_id);

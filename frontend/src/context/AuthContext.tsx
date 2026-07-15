@@ -1,13 +1,13 @@
 import { createContext, useCallback, useContext, useEffect, useState, type ReactNode } from "react";
 import * as authClient from "../api/authClient";
 import { clearTokens, getAccessToken, getRefreshToken, setTokens } from "../lib/tokenStorage";
-import type { User } from "../types";
+import type { RegisterPayload, User } from "../types";
 
 interface AuthContextValue {
   user: User | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, fullName?: string) => Promise<void>;
+  login: (email: string, password: string, rememberMe?: boolean) => Promise<void>;
+  register: (payload: RegisterPayload) => Promise<void>;
   loginWithTokens: (accessToken: string, refreshToken: string) => Promise<void>;
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
@@ -28,7 +28,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const current = await authClient.fetchCurrentUser();
       setUser(current);
     } catch {
-      clearTokens();
+      // A transient network error, an aborted request (e.g. the browser
+      // navigating away mid-flight), or a 5xx doesn't mean the token is
+      // invalid - only httpClient's own 401-plus-failed-refresh path
+      // (see apiRequest) is a real signal to clearTokens(). Clearing here
+      // on any failure would log a user out just because a request didn't
+      // complete in time.
       setUser(null);
     }
   }, []);
@@ -38,14 +43,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  async function login(email: string, password: string) {
-    const tokens = await authClient.login(email, password);
+  async function login(email: string, password: string, rememberMe = true) {
+    const tokens = await authClient.login(email, password, rememberMe);
     setTokens(tokens.access_token, tokens.refresh_token);
     await refreshUser();
   }
 
-  async function register(email: string, password: string, fullName?: string) {
-    const tokens = await authClient.register(email, password, fullName);
+  async function register(payload: RegisterPayload) {
+    const tokens = await authClient.register(payload);
     setTokens(tokens.access_token, tokens.refresh_token);
     await refreshUser();
   }

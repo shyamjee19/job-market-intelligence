@@ -37,7 +37,7 @@ export function JobDetailPage() {
     <PageTransition>
       <div className="max-w-3xl mx-auto px-4 sm:px-6 py-8">
         <Link
-          to="/"
+          to="/jobs"
           className="inline-flex items-center gap-1.5 text-sm mb-5 transition-colors duration-150 hover:text-[var(--text-primary)]"
           style={{ color: "var(--text-secondary)" }}
         >
@@ -79,7 +79,7 @@ export function JobDetailPage() {
                 {error}
               </p>
             </div>
-            <Link to="/">
+            <Link to="/jobs">
               <Button>Back to jobs</Button>
             </Link>
           </Card>

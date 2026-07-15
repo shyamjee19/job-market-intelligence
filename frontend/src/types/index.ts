@@ -103,6 +103,17 @@ export interface TokenResponse {
   token_type: string;
 }
 
+export interface RegisterPayload {
+  first_name: string;
+  last_name: string;
+  email: string;
+  password: string;
+  confirm_password: string;
+  country?: string;
+  job_title?: string;
+  terms_accepted: boolean;
+}
+
 export interface Profile {
   headline: string | null;
   bio: string | null;
@@ -194,4 +205,26 @@ export interface AdminStats {
   admin_users: number;
   new_users_today: number;
   active_users: number;
+}
+
+export interface Notification {
+  notification_id: number;
+  alert_id: number | null;
+  subject: string | null;
+  body: string | null;
+  status: "logged" | "sent" | "failed";
+  is_read: boolean;
+  created_at: string;
+}
+
+export interface NotificationListResponse {
+  items: Notification[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface AIToolResponse {
+  summary: string;
+  data: Record<string, unknown> | null;
 }

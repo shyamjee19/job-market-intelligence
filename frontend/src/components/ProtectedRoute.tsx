@@ -18,3 +18,13 @@ export function AdminRoute({ children }: { children: ReactNode }) {
   if (user.role !== "admin") return <Navigate to="/" replace />;
   return <>{children}</>;
 }
+
+/** For /login, /register, /forgot-password - an already-authenticated
+ * visitor skips straight to the dashboard rather than seeing a login form. */
+export function GuestOnlyRoute({ children }: { children: ReactNode }) {
+  const { user, isLoading } = useAuth();
+
+  if (isLoading) return null;
+  if (user) return <Navigate to="/dashboard" replace />;
+  return <>{children}</>;
+}

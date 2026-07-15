@@ -1,21 +1,53 @@
 from datetime import datetime
 
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, model_validator
 
 
 class RegisterRequest(BaseModel):
+    first_name: str = Field(..., min_length=1, max_length=100)
+    last_name: str = Field(..., min_length=1, max_length=100)
     email: EmailStr
     password: str = Field(..., min_length=8, max_length=128)
-    full_name: str | None = Field(None, max_length=255)
+    confirm_password: str
+    country: str | None = Field(None, max_length=100)
+    job_title: str | None = Field(None, max_length=255)
+    terms_accepted: bool
+
+    @model_validator(mode="after")
+    def _check_confirm_and_terms(self):
+        if self.password != self.confirm_password:
+            raise ValueError("passwords do not match")
+        if not self.terms_accepted:
+            raise ValueError("you must accept the terms of service to create an account")
+        return self
+
+    @property
+    def full_name(self) -> str:
+        return f"{self.first_name.strip()} {self.last_name.strip()}".strip()
 
 
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+    remember_me: bool = False
 
 
 class RefreshRequest(BaseModel):
     refresh_token: str
+
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str = Field(..., min_length=8, max_length=128)
+
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str = Field(..., min_length=8, max_length=128)
 
 
 class TokenResponse(BaseModel):

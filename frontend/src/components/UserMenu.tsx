@@ -1,4 +1,4 @@
-import { LayoutDashboard, LogOut, User as UserIcon } from "lucide-react";
+import { LayoutDashboard, LogOut, Settings, User as UserIcon } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
@@ -62,6 +62,17 @@ export function UserMenu() {
             <UserIcon size={14} />
             Profile & alerts
           </button>
+          <button
+            onClick={() => {
+              setOpen(false);
+              navigate("/settings");
+            }}
+            className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-black/5 dark:hover:bg-white/5"
+            style={{ color: "var(--text-primary)" }}
+          >
+            <Settings size={14} />
+            Settings
+          </button>
           {user.role === "admin" && (
             <button
               onClick={() => {
@@ -79,7 +90,14 @@ export function UserMenu() {
             onClick={async () => {
               setOpen(false);
               await logout();
-              navigate("/");
+              // A hard redirect, not react-router's navigate(): every other
+              // page on this route is now behind ProtectedRoute, and
+              // AnimatePresence keeps the outgoing (still-protected) page
+              // mounted during its exit transition - long enough for its
+              // own guard to notice user is now null and race a redirect
+              // to /login against this one. A full reload sidesteps that
+              // entirely by discarding the old tree instead of racing it.
+              window.location.replace("/");
             }}
             className="w-full flex items-center gap-2 px-3 py-2 text-sm text-left hover:bg-black/5 dark:hover:bg-white/5"
             style={{ color: "var(--status-critical)" }}
