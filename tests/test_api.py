@@ -19,11 +19,15 @@ client = TestClient(app)
 
 
 def test_health():
-    assert client.get("/health").json() == {"status": "ok"}
+    response = client.get("/health")
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == "ok"
+    assert body["checks"]["database"] is True
 
 
 def test_list_jobs_shape():
-    response = client.get("/api/jobs", params={"page_size": 5})
+    response = client.get("/api/v1/jobs", params={"page_size": 5})
     assert response.status_code == 200
     body = response.json()
     assert set(body.keys()) == {"items", "total", "page", "page_size"}
@@ -31,42 +35,42 @@ def test_list_jobs_shape():
 
 
 def test_get_job_not_found():
-    response = client.get("/api/jobs/999999999")
+    response = client.get("/api/v1/jobs/999999999")
     assert response.status_code == 404
 
 
 def test_stats_summary_shape():
-    response = client.get("/api/stats/summary")
+    response = client.get("/api/v1/stats/summary")
     assert response.status_code == 200
     body = response.json()
     assert "total_jobs" in body
 
 
 def test_top_companies_shape():
-    response = client.get("/api/stats/top-companies", params={"limit": 3})
+    response = client.get("/api/v1/stats/top-companies", params={"limit": 3})
     assert response.status_code == 200
     assert len(response.json()) <= 3
 
 
 def test_companies_endpoint():
-    response = client.get("/api/companies", params={"limit": 3})
+    response = client.get("/api/v1/companies", params={"limit": 3})
     assert response.status_code == 200
     assert len(response.json()) <= 3
 
 
 def test_skills_endpoint():
-    response = client.get("/api/skills", params={"limit": 3})
+    response = client.get("/api/v1/skills", params={"limit": 3})
     assert response.status_code == 200
     assert len(response.json()) <= 3
 
 
 def test_sources_endpoint():
-    response = client.get("/api/stats/sources")
+    response = client.get("/api/v1/stats/sources")
     assert response.status_code == 200
 
 
 def test_jobs_csv_export():
-    response = client.get("/api/jobs/export.csv", params={"page_size": 5})
+    response = client.get("/api/v1/jobs/export.csv", params={"page_size": 5})
     assert response.status_code == 200
     assert response.headers["content-type"].startswith("text/csv")
     assert response.text.splitlines()[0].startswith("id,source,position")

@@ -1,4 +1,4 @@
-import { AlertTriangle, Download, MapPin, Search, SearchX, Tag as TagIcon, X } from "lucide-react";
+import { AlertTriangle, Bookmark, Download, MapPin, Search, SearchX, Tag as TagIcon, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { fetchJobs, fetchSources, jobsExportCsvUrl } from "../api/client";
@@ -11,6 +11,7 @@ import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { Input } from "../components/ui/Input";
 import { SkeletonTableRows } from "../components/ui/Skeleton";
+import { useSavedJobs } from "../hooks/useSavedJobs";
 import { formatDate, formatSalary, formatSource } from "../lib/format";
 import type { CountByLabel, JobSummary } from "../types";
 
@@ -18,6 +19,7 @@ const PAGE_SIZE = 20;
 
 export function JobsListPage() {
   const navigate = useNavigate();
+  const { isSaved, toggle: toggleSaved, isAuthed } = useSavedJobs();
   const [search, setSearch] = useState("");
   const [location, setLocation] = useState("");
   const [tag, setTag] = useState("");
@@ -192,6 +194,7 @@ export function JobsListPage() {
                     <th className="text-left font-medium px-4 py-2.5">Salary</th>
                     <th className="text-left font-medium px-4 py-2.5">Tags</th>
                     <th className="text-left font-medium px-4 py-2.5">Posted</th>
+                    {isAuthed && <th className="px-4 py-2.5" />}
                   </tr>
                 </thead>
                 <tbody>
@@ -199,7 +202,7 @@ export function JobsListPage() {
                     <SkeletonTableRows rows={10} />
                   ) : items.length === 0 ? (
                     <tr>
-                      <td colSpan={6} className="px-4 py-16">
+                      <td colSpan={isAuthed ? 7 : 6} className="px-4 py-16">
                         <div className="flex flex-col items-center gap-2 text-center">
                           <SearchX size={26} style={{ color: "var(--text-muted)" }} />
                           <p style={{ color: "var(--text-secondary)" }}>No jobs match your filters.</p>
@@ -269,6 +272,24 @@ export function JobsListPage() {
                         <td className="px-4 py-3 tabular whitespace-nowrap" style={{ color: "var(--text-secondary)" }}>
                           {formatDate(job.date_posted)}
                         </td>
+                        {isAuthed && (
+                          <td className="px-4 py-3">
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                toggleSaved(job.id);
+                              }}
+                              aria-label={isSaved(job.id) ? "Unsave job" : "Save job"}
+                              className="p-1.5 rounded-md transition-colors duration-150 hover:bg-black/5 dark:hover:bg-white/10"
+                            >
+                              <Bookmark
+                                size={16}
+                                fill={isSaved(job.id) ? "var(--series-blue)" : "none"}
+                                style={{ color: isSaved(job.id) ? "var(--series-blue)" : "var(--text-muted)" }}
+                              />
+                            </button>
+                          </td>
+                        )}
                       </tr>
                     ))
                   )}

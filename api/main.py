@@ -1,31 +1,45 @@
-import csv
-import io
-
-from fastapi import FastAPI, HTTPException, Query, Request
+"""FastAPI app entrypoint. Routers are versioned under /api/v1 - see
+api/routes/ (jobs, stats, users, admin), auth/router.py, and ai/router.py
+for the actual endpoint implementations. This module only wires them
+together plus cross-cutting concerns (CORS, exception handling, health).
+"""
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi.responses import JSONResponse
 
-from api.schemas import (
-    CountByLabel,
-    HiringTrend,
-    JobDetail,
-    JobListResponse,
-    PostingsByDate,
-    SalaryBucket,
-    SummaryStats,
-)
-from database import queries
+from ai.router import router as ai_router
+from api.routes.admin import router as admin_router
+from api.routes.jobs import router as jobs_router
+from api.routes.stats import router as stats_router
+from api.routes.users import router as users_router
+from auth.router import router as auth_router
+from config.settings import settings
+from database.connection import get_connection
+from utils.cache import get_cache
 from utils.exceptions import DatabaseError
 from utils.logger import logger
 
-app = FastAPI(title="job-market-intelligence API")
+API_V1_PREFIX = "/api/v1"
+
+app = FastAPI(
+    title="job-market-intelligence API",
+    version="1.0.0",
+    description="Multi-source job market data, an AI assistant, and user accounts (saved jobs, alerts, profiles).",
+)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
-    allow_methods=["GET"],
+    allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
     allow_headers=["*"],
 )
+
+app.include_router(jobs_router, prefix=API_V1_PREFIX)
+app.include_router(stats_router, prefix=API_V1_PREFIX)
+app.include_router(auth_router, prefix=f"{API_V1_PREFIX}/auth", tags=["auth"])
+app.include_router(users_router, prefix=API_V1_PREFIX)
+app.include_router(admin_router, prefix=API_V1_PREFIX)
+app.include_router(ai_router, prefix=f"{API_V1_PREFIX}/ai", tags=["ai"])
 
 
 @app.exception_handler(DatabaseError)
@@ -34,127 +48,47 @@ def handle_database_error(request: Request, exc: DatabaseError):
     return JSONResponse(status_code=503, content={"detail": "Database unavailable"})
 
 
-@app.get("/health")
+@app.get("/health", tags=["health"])
 def health():
-    return {"status": "ok"}
+    """Liveness/readiness probe. Checks the database is actually
+    reachable, not just that the process is up - a common gap that lets
+    a load balancer keep routing traffic to an instance that can't serve
+    any real request. Redis is only checked when configured - its absence
+    is a supported degrade-to-in-memory state, not a failure."""
+    checks: dict[str, bool] = {"database": _check_database()}
+    if settings.REDIS_URL:
+        checks["redis"] = _check_redis()
 
-
-@app.get("/api/jobs", response_model=JobListResponse)
-def get_jobs(
-    search: str | None = None,
-    company: str | None = None,
-    location: str | None = None,
-    tag: str | None = None,
-    source: str | None = None,
-    salary_min: int | None = None,
-    page: int = Query(1, ge=1),
-    page_size: int = Query(20, ge=1, le=queries.MAX_PAGE_SIZE),
-):
-    rows, total = queries.list_jobs(
-        search=search,
-        company=company,
-        location=location,
-        tag=tag,
-        source=source,
-        salary_min=salary_min,
-        page=page,
-        page_size=page_size,
-    )
-    return {"items": rows, "total": total, "page": page, "page_size": page_size}
-
-
-@app.get("/api/jobs/export.csv")
-def export_jobs_csv(
-    search: str | None = None,
-    company: str | None = None,
-    location: str | None = None,
-    tag: str | None = None,
-    source: str | None = None,
-    salary_min: int | None = None,
-):
-    """Exports every job matching the given filters (not just one page) as CSV."""
-    rows, _ = queries.list_jobs(
-        search=search, company=company, location=location, tag=tag,
-        source=source, salary_min=salary_min, page=1, page_size=queries.MAX_PAGE_SIZE,
-    )
-
-    buffer = io.StringIO()
-    fieldnames = [
-        "id", "source", "position", "company", "location", "remote_type",
-        "salary_min", "salary_max", "date_posted", "tags", "job_url", "apply_url",
-    ]
-    writer = csv.DictWriter(buffer, fieldnames=fieldnames, extrasaction="ignore")
-    writer.writeheader()
-    for row in rows:
-        writer.writerow({**row, "tags": ", ".join(row.get("tags") or [])})
-
-    buffer.seek(0)
-    return StreamingResponse(
-        buffer,
-        media_type="text/csv",
-        headers={"Content-Disposition": "attachment; filename=jobs.csv"},
+    status_ok = all(checks.values())
+    return JSONResponse(
+        status_code=200 if status_ok else 503,
+        content={
+            "status": "ok" if status_ok else "degraded",
+            "version": app.version,
+            "cache_backend": get_cache().name,
+            "checks": checks,
+        },
     )
 
 
-@app.get("/api/jobs/{job_id}", response_model=JobDetail)
-def get_job(job_id: int):
-    job = queries.get_job_by_id(job_id)
-    if job is None:
-        raise HTTPException(status_code=404, detail="Job not found")
-    return job
+def _check_database() -> bool:
+    try:
+        conn = get_connection()
+        conn.close()
+        return True
+    except DatabaseError:
+        return False
 
 
-@app.get("/api/companies", response_model=list[CountByLabel])
-def get_companies(limit: int = Query(50, ge=1, le=200)):
-    return [{"label": r["company"], "count": r["count"]} for r in queries.list_companies(limit)]
+def _check_redis() -> bool:
+    """A fresh ping, not just "did the cached Cache singleton resolve to
+    Redis at startup" - that would miss Redis going down mid-run, since
+    get_cache() only resolves its backend once and then reuses it."""
+    try:
+        import redis
 
-
-@app.get("/api/skills", response_model=list[CountByLabel])
-def get_skills(limit: int = Query(50, ge=1, le=200)):
-    return [{"label": r["tag"], "count": r["count"]} for r in queries.list_skills(limit)]
-
-
-@app.get("/api/stats/summary", response_model=SummaryStats)
-def get_summary():
-    return queries.summary_stats()
-
-
-@app.get("/api/stats/top-companies", response_model=list[CountByLabel])
-def get_top_companies(limit: int = Query(10, ge=1, le=50), source: str | None = None):
-    return [{"label": r["company"], "count": r["count"]} for r in queries.top_companies(limit, source)]
-
-
-@app.get("/api/stats/top-tags", response_model=list[CountByLabel])
-def get_top_tags(limit: int = Query(15, ge=1, le=50), source: str | None = None, category: str | None = None):
-    return [{"label": r["tag"], "count": r["count"]} for r in queries.top_tags(limit, source, category)]
-
-
-@app.get("/api/stats/postings-by-date", response_model=list[PostingsByDate])
-def get_postings_by_date():
-    return [{"date": r["date_posted"], "count": r["count"]} for r in queries.postings_by_date()]
-
-
-@app.get("/api/stats/salary-distribution", response_model=list[SalaryBucket])
-def get_salary_distribution():
-    return [
-        {"bucket_start": r["bucket_start"], "bucket_end": r["bucket_start"] + 20000, "count": r["count"]}
-        for r in queries.salary_distribution()
-    ]
-
-
-@app.get("/api/stats/sources", response_model=list[CountByLabel])
-def get_sources():
-    return [{"label": r["source"], "count": r["count"]} for r in queries.sources_breakdown()]
-
-
-@app.get("/api/stats/hiring-map", response_model=list[CountByLabel])
-def get_hiring_map():
-    """Best-effort: country is inferred from free-text location, so
-    postings whose location didn't match a known country/city aren't
-    included (see utils/geo.py)."""
-    return [{"label": r["country"], "count": r["count"]} for r in queries.hiring_map()]
-
-
-@app.get("/api/stats/trend", response_model=HiringTrend)
-def get_trend():
-    return queries.hiring_trend()
+        client = redis.from_url(settings.REDIS_URL, socket_connect_timeout=2)
+        client.ping()
+        return True
+    except Exception:
+        return False

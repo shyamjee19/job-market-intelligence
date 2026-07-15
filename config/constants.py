@@ -7,6 +7,9 @@ between dev/staging/prod.
 
 DEFAULT_REMOTEOK_API_URL = "https://remoteok.com/api"
 DEFAULT_ARBEITNOW_API_URL = "https://arbeitnow.com/api/job-board-api"
+DEFAULT_ADZUNA_API_URL = "https://api.adzuna.com/v1/api/jobs"
+DEFAULT_ADZUNA_COUNTRY = "us"
+DEFAULT_USAJOBS_API_URL = "https://data.usajobs.gov/api/search"
 
 RAW_DATA_DIR = "data/raw"
 RAW_LATEST_FILENAME = "jobs_latest.json"
@@ -20,3 +23,5 @@ METADATA_RECORD_INDEX = 0
 
 SOURCE_REMOTEOK = "remoteok"
 SOURCE_ARBEITNOW = "arbeitnow"
+SOURCE_ADZUNA = "adzuna"
+SOURCE_USAJOBS = "usajobs"

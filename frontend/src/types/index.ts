@@ -72,3 +72,126 @@ export interface JobFilters {
   page?: number;
   page_size?: number;
 }
+
+export interface ChatSource {
+  job_id: string;
+  position: string | null;
+  company: string | null;
+  score: number;
+}
+
+export interface ChatResponse {
+  answer: string;
+  sources: ChatSource[];
+  conversation_id: string;
+  prompt_tokens: number | null;
+  completion_tokens: number | null;
+}
+
+export interface User {
+  user_id: number;
+  email: string;
+  full_name: string | null;
+  role: "user" | "admin";
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface TokenResponse {
+  access_token: string;
+  refresh_token: string;
+  token_type: string;
+}
+
+export interface Profile {
+  headline: string | null;
+  bio: string | null;
+  location: string | null;
+  skills: string[];
+  experience_years: number | null;
+  resume_filename: string | null;
+  resume_uploaded_at: string | null;
+}
+
+export interface ProfileUpdate {
+  headline?: string | null;
+  bio?: string | null;
+  location?: string | null;
+  skills?: string[] | null;
+  experience_years?: number | null;
+}
+
+export interface FavoriteCompany {
+  company_key: number;
+  company_name: string;
+  favorited_at: string;
+}
+
+export interface JobAlert {
+  alert_id: number;
+  name: string;
+  keywords: string | null;
+  location: string | null;
+  tag: string | null;
+  source: string | null;
+  salary_min: number | null;
+  remote_type: string | null;
+  frequency: "instant" | "daily" | "weekly";
+  is_active: boolean;
+  last_checked_at: string | null;
+  created_at: string;
+}
+
+export interface JobAlertCreate {
+  name: string;
+  keywords?: string;
+  location?: string;
+  tag?: string;
+  source?: string;
+  salary_min?: number;
+  remote_type?: string;
+  frequency: "instant" | "daily" | "weekly";
+}
+
+export interface AdminUser {
+  user_id: number;
+  email: string;
+  full_name: string | null;
+  role: "user" | "admin";
+  google_id: string | null;
+  github_id: string | null;
+  is_active: boolean;
+  created_at: string;
+}
+
+export interface AdminUserListResponse {
+  items: AdminUser[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface AuditLog {
+  log_id: number;
+  user_id: number | null;
+  action: string;
+  resource_type: string | null;
+  resource_id: string | null;
+  metadata: Record<string, unknown> | null;
+  ip_address: string | null;
+  created_at: string;
+}
+
+export interface AuditLogListResponse {
+  items: AuditLog[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+export interface AdminStats {
+  total_users: number;
+  admin_users: number;
+  new_users_today: number;
+  active_users: number;
+}

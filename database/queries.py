@@ -7,7 +7,7 @@ from utils.skill_categories import CATEGORY_MATCHERS
 
 MAX_PAGE_SIZE = 100
 
-_TAGS_SUBQUERY = """
+TAGS_SUBQUERY = """
     COALESCE(
         (SELECT array_agg(sk.skill_name ORDER BY sk.skill_name)
          FROM bridge_job_skill bjs JOIN dim_skill sk ON sk.skill_key = bjs.skill_key
@@ -16,7 +16,7 @@ _TAGS_SUBQUERY = """
     ) AS tags
 """
 
-_JOB_SELECT = f"""
+JOB_SELECT = f"""
     SELECT
         f.job_key AS id,
         ds.source_name AS source,
@@ -30,7 +30,7 @@ _JOB_SELECT = f"""
         dd.full_date AS date_posted,
         f.job_url,
         f.apply_url,
-        {_TAGS_SUBQUERY}
+        {TAGS_SUBQUERY}
     FROM fact_jobs f
     LEFT JOIN dim_company dc ON dc.company_key = f.company_key
     LEFT JOIN dim_location dl ON dl.location_key = f.location_key
@@ -97,7 +97,7 @@ def list_jobs(
 
         cursor.execute(
             f"""
-            {_JOB_SELECT}
+            {JOB_SELECT}
             {where_clause}
             ORDER BY dd.full_date DESC NULLS LAST, f.job_key DESC
             LIMIT %s OFFSET %s
@@ -129,7 +129,7 @@ def get_job_by_id(job_id: int) -> dict | None:
                 f.description,
                 f.created_at,
                 f.updated_at,
-                {_TAGS_SUBQUERY}
+                {TAGS_SUBQUERY}
             FROM fact_jobs f
             LEFT JOIN dim_company dc ON dc.company_key = f.company_key
             LEFT JOIN dim_location dl ON dl.location_key = f.location_key
@@ -305,3 +305,31 @@ def list_companies(limit: int = 50) -> list[dict]:
 
 def list_skills(limit: int = 50) -> list[dict]:
     return top_tags(limit=limit)
+
+
+def list_all_jobs_for_indexing() -> list[dict]:
+    """Every job's full detail (including description), for the AI
+    module's RAG indexer - not paginated, since it's meant to run as a
+    batch job over the whole table, not serve a page request."""
+    with get_db_cursor(cursor_factory=RealDictCursor) as cursor:
+        cursor.execute(
+            f"""
+            SELECT
+                f.job_key AS id,
+                ds.source_name AS source,
+                dc.company_name AS company,
+                f.position,
+                dl.location_name AS location,
+                f.remote_type,
+                f.salary_min,
+                f.salary_max,
+                f.description,
+                {TAGS_SUBQUERY}
+            FROM fact_jobs f
+            LEFT JOIN dim_company dc ON dc.company_key = f.company_key
+            LEFT JOIN dim_location dl ON dl.location_key = f.location_key
+            LEFT JOIN dim_source ds ON ds.source_key = f.source_key
+            ORDER BY f.job_key
+            """
+        )
+        return cursor.fetchall()

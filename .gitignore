@@ -5,6 +5,10 @@ data/processed/*
 !data/processed/.gitkeep
 logs/*
 !logs/.gitkeep
+data/ai/*
+!data/ai/.gitkeep
+data/resumes/*
+!data/resumes/.gitkeep
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

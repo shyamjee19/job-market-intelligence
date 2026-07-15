@@ -1,5 +1,5 @@
 import DOMPurify from "dompurify";
-import { AlertTriangle, ArrowLeft, Calendar, ExternalLink, MapPin, Wallet } from "lucide-react";
+import { AlertTriangle, ArrowLeft, Bookmark, Calendar, ExternalLink, Heart, MapPin, Wallet } from "lucide-react";
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { fetchJob } from "../api/client";
@@ -10,6 +10,8 @@ import { Avatar } from "../components/ui/Avatar";
 import { Button } from "../components/ui/Button";
 import { Card } from "../components/ui/Card";
 import { Skeleton } from "../components/ui/Skeleton";
+import { useFavoriteCompanies } from "../hooks/useFavoriteCompanies";
+import { useSavedJobs } from "../hooks/useSavedJobs";
 import { formatDate, formatSalary } from "../lib/format";
 import type { JobDetail } from "../types";
 
@@ -18,6 +20,8 @@ export function JobDetailPage() {
   const [job, setJob] = useState<JobDetail | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const { isSaved, toggle: toggleSaved, isAuthed } = useSavedJobs();
+  const { isFavorite, toggle: toggleFavorite } = useFavoriteCompanies();
 
   useEffect(() => {
     if (!jobId) return;
@@ -83,19 +87,36 @@ export function JobDetailPage() {
 
         {job && !loading && (
           <Card className="p-6">
-            <div className="flex items-center gap-3.5">
-              <Avatar name={job.company ?? "?"} size={48} />
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-xl font-semibold" style={{ color: "var(--text-primary)" }}>
-                    {job.position}
-                  </h1>
-                  <SourceBadge source={job.source} />
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex items-center gap-3.5">
+                <Avatar name={job.company ?? "?"} size={48} />
+                <div>
+                  <div className="flex items-center gap-2">
+                    <h1 className="text-xl font-semibold" style={{ color: "var(--text-primary)" }}>
+                      {job.position}
+                    </h1>
+                    <SourceBadge source={job.source} />
+                  </div>
+                  <p className="text-[15px] mt-0.5" style={{ color: "var(--text-secondary)" }}>
+                    {job.company}
+                  </p>
                 </div>
-                <p className="text-[15px] mt-0.5" style={{ color: "var(--text-secondary)" }}>
-                  {job.company}
-                </p>
               </div>
+
+              {isAuthed && (
+                <div className="flex items-center gap-2 shrink-0">
+                  <Button size="sm" onClick={() => toggleSaved(job.id)}>
+                    <Bookmark size={14} fill={isSaved(job.id) ? "var(--series-blue)" : "none"} />
+                    {isSaved(job.id) ? "Saved" : "Save"}
+                  </Button>
+                  {job.company && (
+                    <Button size="sm" onClick={() => toggleFavorite(job.company!)}>
+                      <Heart size={14} fill={isFavorite(job.company) ? "var(--status-critical)" : "none"} />
+                      {isFavorite(job.company) ? "Following" : "Follow company"}
+                    </Button>
+                  )}
+                </div>
+              )}
             </div>
 
             <div

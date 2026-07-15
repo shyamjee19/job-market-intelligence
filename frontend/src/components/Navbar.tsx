@@ -1,13 +1,18 @@
-import { BarChart3, Briefcase } from "lucide-react";
+import { BarChart3, Bookmark, Briefcase, Sparkles } from "lucide-react";
 import { NavLink } from "react-router-dom";
+import { useAuth } from "../context/AuthContext";
 import { ThemeToggle } from "./ThemeToggle";
+import { UserMenu } from "./UserMenu";
 
 const navItems = [
   { to: "/", label: "Jobs", icon: Briefcase, end: true },
   { to: "/dashboard", label: "Dashboard", icon: BarChart3, end: false },
+  { to: "/assistant", label: "Assistant", icon: Sparkles, end: false },
 ];
 
 export function Navbar() {
+  const { user } = useAuth();
+
   return (
     <header
       className="sticky top-0 z-30"
@@ -47,10 +52,26 @@ export function Navbar() {
                 {label}
               </NavLink>
             ))}
+            {user && (
+              <NavLink
+                to="/saved"
+                className="flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm font-medium transition-colors duration-150"
+                style={({ isActive }) => ({
+                  color: isActive ? "var(--text-primary)" : "var(--text-secondary)",
+                  background: isActive ? "var(--surface-2)" : "transparent",
+                })}
+              >
+                <Bookmark size={15} />
+                Saved
+              </NavLink>
+            )}
           </nav>
         </div>
 
-        <ThemeToggle />
+        <div className="flex items-center gap-3">
+          <ThemeToggle />
+          <UserMenu />
+        </div>
       </div>
     </header>
   );

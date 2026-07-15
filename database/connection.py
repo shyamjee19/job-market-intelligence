@@ -41,12 +41,20 @@ def get_db_cursor(commit: bool = False, dbname: str | None = None, cursor_factor
         conn.close()
 
 
-def init_schema(schema_path: str = "database/schema.sql", dbname: str | None = None) -> None:
-    with open(schema_path, "r", encoding="utf-8") as file:
-        schema_sql = file.read()
+DEFAULT_SCHEMA_PATHS = ("database/schema.sql", "database/schema_app.sql")
+
+
+def init_schema(schema_paths=DEFAULT_SCHEMA_PATHS, dbname: str | None = None) -> None:
+    """Runs each schema file in order (schema_app.sql references tables
+    schema.sql creates, so order matters). Pass a single path as a
+    one-element sequence if you only want one file applied."""
+    if isinstance(schema_paths, str):
+        schema_paths = (schema_paths,)
 
     with get_db_cursor(commit=True, dbname=dbname) as cursor:
-        cursor.execute(schema_sql)
+        for schema_path in schema_paths:
+            with open(schema_path, "r", encoding="utf-8") as file:
+                cursor.execute(file.read())
 
     logger.info("Database schema is up to date%s.", f" ({dbname})" if dbname else "")
 

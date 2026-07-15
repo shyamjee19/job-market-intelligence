@@ -30,3 +30,34 @@ def test_non_dict_record_is_rejected():
 
 def test_unknown_source_has_no_required_fields():
     assert validate_raw_record("unknown-source", {}) == []
+
+
+def test_valid_adzuna_record_has_no_errors():
+    raw = {"id": "123", "title": "Engineer", "company": {"display_name": "Acme"}}
+    assert validate_raw_record("adzuna", raw) == []
+
+
+def test_adzuna_missing_nested_company_name_is_rejected():
+    raw = {"id": "123", "title": "Engineer", "company": {}}
+    errors = validate_raw_record("adzuna", raw)
+    assert "missing required field 'company.display_name'" in errors
+
+
+def test_adzuna_missing_company_object_entirely_is_rejected():
+    raw = {"id": "123", "title": "Engineer"}
+    errors = validate_raw_record("adzuna", raw)
+    assert "missing required field 'company.display_name'" in errors
+
+
+def test_valid_usajobs_record_has_no_errors():
+    raw = {
+        "MatchedObjectId": "999",
+        "MatchedObjectDescriptor": {"PositionTitle": "Analyst", "OrganizationName": "DoD"},
+    }
+    assert validate_raw_record("usajobs", raw) == []
+
+
+def test_usajobs_missing_nested_title_is_rejected():
+    raw = {"MatchedObjectId": "999", "MatchedObjectDescriptor": {"OrganizationName": "DoD"}}
+    errors = validate_raw_record("usajobs", raw)
+    assert "missing required field 'MatchedObjectDescriptor.PositionTitle'" in errors

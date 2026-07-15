@@ -36,6 +36,80 @@ def make_arbeitnow_raw(**overrides):
     return base
 
 
+def make_adzuna_raw(**overrides):
+    base = {
+        "id": "4567890",
+        "title": "Backend Engineer",
+        "company": {"display_name": "Acme"},
+        "location": {"display_name": "London, UK"},
+        "salary_min": 50000.0,
+        "salary_max": 70000.0,
+        "created": "2026-07-09T10:30:04Z",
+        "category": {"label": "IT Jobs"},
+        "redirect_url": "https://www.adzuna.co.uk/land/ad/4567890",
+        "description": "Build things.",
+    }
+    base.update(overrides)
+    return base
+
+
+def make_usajobs_raw(**overrides):
+    descriptor = {
+        "PositionTitle": "IT Specialist",
+        "OrganizationName": "Department of Defense",
+        "PositionLocationDisplay": "Washington, DC",
+        "PositionRemuneration": [{"MinimumRange": "70000", "MaximumRange": "90000"}],
+        "PublicationStartDate": "2026-07-01",
+        "JobCategory": [{"Name": "Information Technology"}],
+        "PositionURI": "https://www.usajobs.gov/job/999888",
+        "UserArea": {"Details": {"JobSummary": "Build things."}},
+    }
+    descriptor.update(overrides.pop("descriptor_overrides", {}))
+    base = {"MatchedObjectId": "999888", "MatchedObjectDescriptor": descriptor}
+    base.update(overrides)
+    return base
+
+
+def test_transforms_valid_adzuna_record():
+    result = transform_jobs("adzuna", [make_adzuna_raw()])
+    assert len(result) == 1
+    job = result[0]
+    assert job["source"] == "adzuna"
+    assert job["external_id"] == "4567890"
+    assert job["company"] == "Acme"
+    assert job["location"] == "London, UK"
+    assert job["country"] == "United Kingdom"
+    assert job["salary_min"] == 50000
+    assert job["tags"] == ["IT Jobs"]
+
+
+def test_adzuna_missing_company_object_does_not_crash():
+    result = transform_jobs("adzuna", [make_adzuna_raw(company=None)])
+    assert result[0]["company"] is None
+
+
+def test_transforms_valid_usajobs_record():
+    result = transform_jobs("usajobs", [make_usajobs_raw()])
+    assert len(result) == 1
+    job = result[0]
+    assert job["source"] == "usajobs"
+    assert job["external_id"] == "999888"
+    assert job["company"] == "Department of Defense"
+    assert job["country"] == "United States"
+    assert job["salary_min"] == 70000
+    assert job["salary_max"] == 90000
+    assert job["tags"] == ["Information Technology"]
+    assert job["date_posted"] is not None
+
+
+def test_usajobs_detects_remote_from_location_display():
+    result = transform_jobs(
+        "usajobs",
+        [make_usajobs_raw(descriptor_overrides={"PositionLocationDisplay": "Anywhere in the U.S. (remote)"})],
+    )
+    assert result[0]["remote_type"] == "remote"
+
+
 def test_transforms_valid_remoteok_record():
     result = transform_jobs("remoteok", [make_remoteok_raw()])
     assert len(result) == 1
