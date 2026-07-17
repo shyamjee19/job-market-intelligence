@@ -7,7 +7,11 @@
 
 requests==2.32.3
 python-dotenv==1.0.1
-psycopg2-binary==2.9.9
+# Not pinned to an exact patch like everything else here on purpose: this
+# binary wheel needs to match whatever Python version actually runs it
+# (2.9.9 has no compatible build for newer CPython releases - pin the
+# Python version instead, via runtime.txt/.python-version, not this).
+psycopg2-binary>=2.9.9
 
 # --- API ---
 fastapi==0.115.0
