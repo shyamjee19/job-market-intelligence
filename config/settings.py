@@ -59,6 +59,10 @@ class Settings:
         self.DB_NAME = os.getenv("DB_NAME", "job_market")
         self.DB_USER = os.getenv("DB_USER", "postgres")
         self.DB_PASSWORD = os.getenv("DB_PASSWORD", "")
+        # Unset locally (a local Postgres install doesn't need TLS). Hosted
+        # providers (Neon, Supabase, RDS, ...) require it - set this to
+        # "require" in production rather than editing connection.py.
+        self.DB_SSLMODE = os.getenv("DB_SSLMODE")
 
         # --- AI module (ai/) ---
         # Which provider actually answers chat/generation requests, and
@@ -161,6 +165,16 @@ class Settings:
         self.SNOWFLAKE_DATABASE = os.getenv("SNOWFLAKE_DATABASE", "JMI_DB")
         self.SNOWFLAKE_SCHEMA = os.getenv("SNOWFLAKE_SCHEMA", "CURATED")
         self.SNOWFLAKE_ROLE = os.getenv("SNOWFLAKE_ROLE")
+
+        # --- CORS (api/main.py) ---
+        # Comma-separated list of origins the browser is allowed to call the
+        # API from. Defaults cover local dev; production must add the real
+        # deployed frontend origin(s) (e.g. https://your-app.vercel.app).
+        self.CORS_ALLOWED_ORIGINS = [
+            origin.strip()
+            for origin in os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://127.0.0.1:5173").split(",")
+            if origin.strip()
+        ]
 
         # --- Logging ---
         self.LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO")

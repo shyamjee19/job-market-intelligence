@@ -15,6 +15,7 @@ def get_connection(dbname: str | None = None):
             database=dbname or settings.DB_NAME,
             user=settings.DB_USER,
             password=settings.DB_PASSWORD,
+            **({"sslmode": settings.DB_SSLMODE} if settings.DB_SSLMODE else {}),
         )
     except psycopg2.OperationalError as e:
         raise DatabaseError(f"Could not connect to database: {e}") from e

@@ -1,0 +1,57 @@
+databases:
+  - name: job-market-db
+    plan: free
+    databaseName: job_market
+    user: job_market_user
+
+services:
+  - type: web
+    name: job-market-intelligence-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn api.main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: DB_HOST
+        fromDatabase:
+          name: job-market-db
+          property: host
+      - key: DB_PORT
+        fromDatabase:
+          name: job-market-db
+          property: port
+      - key: DB_NAME
+        fromDatabase:
+          name: job-market-db
+          property: database
+      - key: DB_USER
+        fromDatabase:
+          name: job-market-db
+          property: user
+      - key: DB_PASSWORD
+        fromDatabase:
+          name: job-market-db
+          property: password
+      - key: DB_SSLMODE
+        value: require
+      - key: JWT_SECRET_KEY
+        generateValue: true
+      # Set these two to your real Vercel URL after the frontend is
+      # deployed - they can't be known until then, so they're not synced
+      # automatically. See the deployment steps in the chat / README.
+      - key: FRONTEND_URL
+        sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
+      # Optional - add real values in the Render dashboard if you want
+      # these features live (AI assistant/tools, real OAuth, real email):
+      - key: OPENAI_API_KEY
+        sync: false
+      - key: GOOGLE_CLIENT_ID
+        sync: false
+      - key: GOOGLE_CLIENT_SECRET
+        sync: false
+      - key: GITHUB_CLIENT_ID
+        sync: false
+      - key: GITHUB_CLIENT_SECRET
+        sync: false

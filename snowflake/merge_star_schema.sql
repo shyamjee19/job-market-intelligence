@@ -1,3 +1,4 @@
+
 -- Populates the star schema from whatever currently sits in STG_JOBS.
 -- Idempotent: safe to run after every load, only inserts what's missing
 -- and updates facts that already exist (matched on job_id).
